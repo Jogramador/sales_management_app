@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1762630955092,
+      "tag": "0000_crazy_riptide",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1762630986780,
+      "tag": "0001_high_sabra",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1763436453799,
+      "tag": "0002_jittery_big_bertha",
+      "breakpoints": true
+    }
+  ]
+}
