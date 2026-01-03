@@ -5,9 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Phone, Plus, ChevronRight, Loader2, Edit2, Trash2, MessageCircle } from "lucide-react";
+import { Phone, Plus, ChevronRight, Loader2, Edit2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Switch } from "@/components/ui/switch";
 
 export default function Clients() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -120,11 +119,6 @@ export default function Clients() {
       return;
     }
 
-    if (formData.whatsappEnabled && !formData.phone) {
-      toast.error("Telefone é obrigatório quando WhatsApp está ativado");
-      return;
-    }
-
     if (isEditMode && editingClientId) {
       updateClientMutation.mutate({
         id: editingClientId,
@@ -209,12 +203,6 @@ export default function Clients() {
                     <Phone className="w-4 h-4" />
                     {client.phone || "Sem telefone"}
                   </div>
-                  {client.whatsappEnabled === 1 && (
-                    <div className="flex items-center gap-2 text-sm text-blue-500 mt-1">
-                      <MessageCircle className="w-4 h-4" />
-                      WhatsApp habilitado
-                    </div>
-                  )}
                   {client.notes && (
                     <p className="text-sm text-muted-foreground mt-2">{client.notes}</p>
                   )}
@@ -330,29 +318,13 @@ export default function Clients() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-foreground">Telefone {formData.whatsappEnabled && "*"}</label>
+              <label className="text-sm font-medium text-foreground">Telefone</label>
               <Input
                 name="phone"
                 value={formData.phone}
                 onChange={handleInputChange}
                 placeholder="(00) 00000-0000"
                 className="mt-1"
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border">
-              <div className="flex items-center gap-2">
-                <MessageCircle className="w-4 h-4 text-blue-500" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">Habilitar WhatsApp</p>
-                  <p className="text-xs text-muted-foreground">Enviar notificações de cobrança</p>
-                </div>
-              </div>
-              <Switch
-                checked={formData.whatsappEnabled}
-                onCheckedChange={(checked) => {
-                  setFormData((prev) => ({ ...prev, whatsappEnabled: checked }));
-                }}
               />
             </div>
 

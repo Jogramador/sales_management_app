@@ -1,0 +1,1 @@
+ALTER TABLE `installments` ADD `contacted` int DEFAULT 0 NOT NULL;

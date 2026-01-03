@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Clients from "./pages/Clients";
 import Sales from "./pages/Sales";
 import Payments from "./pages/Payments";
+import Collections from "./pages/Collections";
 import Login from "./pages/Login";
 
 function Router() {
@@ -46,6 +47,13 @@ function Router() {
         {() => (
           <DashboardLayout>
             <Payments />
+          </DashboardLayout>
+        )}
+      </Route>
+      <Route path="/collections">
+        {() => (
+          <DashboardLayout>
+            <Collections />
           </DashboardLayout>
         )}
       </Route>

@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -236,6 +236,7 @@ export async function getInstallmentsByUserId(userId: number) {
       amount: installments.amount,
       status: installments.status,
       paidAt: installments.paidAt,
+      contacted: installments.contacted,
       createdAt: installments.createdAt,
       updatedAt: installments.updatedAt,
       clientName: clients.name,
@@ -282,4 +283,52 @@ export async function getClientSalesHistory(clientId: number) {
     .from(sales)
     .where(eq(sales.clientId, clientId))
     .orderBy(desc(sales.date));
+}
+
+// Get clients with installments due soon (within next 7 days)
+export async function getClientsWithDueInstallments(userId: number, daysAhead: number = 7) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const futureDate = new Date(now);
+  futureDate.setDate(futureDate.getDate() + daysAhead);
+  futureDate.setHours(23, 59, 59, 999);
+
+  return db
+    .select({
+      clientId: clients.id,
+      clientName: clients.name,
+      clientPhone: clients.phone,
+      installmentId: installments.id,
+      installmentNumber: installments.number,
+      dueDate: installments.dueDate,
+      amount: installments.amount,
+      status: installments.status,
+      contacted: installments.contacted,
+      saleId: installments.saleId,
+    })
+    .from(installments)
+    .innerJoin(sales, eq(installments.saleId, sales.id))
+    .innerJoin(clients, eq(sales.clientId, clients.id))
+    .where(
+      and(
+        eq(sales.userId, userId),
+        eq(installments.status, "pending"),
+        gte(installments.dueDate, now),
+        lte(installments.dueDate, futureDate)
+      )
+    )
+    .orderBy(installments.dueDate);
+}
+
+// Update contacted status for an installment
+export async function updateInstallmentContacted(installmentId: number, contacted: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db
+    .update(installments)
+    .set({ contacted: contacted ? 1 : 0, updatedAt: new Date() })
+    .where(eq(installments.id, installmentId));
 }

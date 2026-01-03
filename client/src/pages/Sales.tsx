@@ -343,14 +343,14 @@ export default function Sales() {
       paymentType === "installment"
         ? installments.map(i => ({
             number: i.number,
-            dueDate: new Date(i.dueDate),
+            dueDate: createLocalDate(i.dueDate),
             amount: Math.round(i.amount * 100), // Convert to cents
           }))
         : undefined;
 
     createSaleMutation.mutate({
       clientId: Number(selectedClientId),
-      date: new Date(saleDate),
+      date: createLocalDate(saleDate),
       total: totalInCents, // Convert to cents
       paymentType,
       installmentCount: paymentType === "installment" ? installments.length : 1,
@@ -379,6 +379,12 @@ export default function Sales() {
 
   const formatDate = (date: Date | string) => {
     return new Intl.DateTimeFormat("pt-BR").format(new Date(date));
+  };
+
+  // Helper function to create a date in local timezone from YYYY-MM-DD string
+  const createLocalDate = (dateString: string): Date => {
+    const [year, month, day] = dateString.split("-").map(Number);
+    return new Date(year, month - 1, day);
   };
 
   const handleDeleteSale = (saleId: number) => {

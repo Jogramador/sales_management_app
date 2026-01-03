@@ -22,6 +22,13 @@
       "when": 1763436453799,
       "tag": "0002_jittery_big_bertha",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1767373691803,
+      "tag": "0003_faulty_genesis",
+      "breakpoints": true
     }
   ]
 }

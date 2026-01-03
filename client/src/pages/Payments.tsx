@@ -83,15 +83,6 @@ export default function Payments() {
     },
   });
 
-  const sendNotificationMutation =
-    trpc.installments.sendNotification.useMutation({
-      onSuccess: () => {
-        toast.success("Notificacao enviada via WhatsApp!");
-      },
-      onError: error => {
-        toast.error(error.message || "Erro ao enviar notificacao");
-      },
-    });
 
   const updateStatusMutation = trpc.installments.updateStatus.useMutation({
     onSuccess: () => {
@@ -561,37 +552,6 @@ export default function Payments() {
                       : "Marcar como Pago"}
                   </Button>
                 )}
-                <Button
-                  onClick={() => {
-                    const client = clients.find(
-                      c => c.id === selectedSale?.clientId
-                    );
-                    if (!client?.whatsappEnabled) {
-                      toast.error(
-                        "WhatsApp nao esta habilitado para este cliente"
-                      );
-                      return;
-                    }
-                    if (!client?.phone) {
-                      toast.error("Cliente nao possui telefone cadastrado");
-                      return;
-                    }
-                    sendNotificationMutation.mutate({
-                      installmentId: selectedInstallment.id,
-                    });
-                  }}
-                  variant="outline"
-                  className="gap-2"
-                  disabled={
-                    sendNotificationMutation.isPending ||
-                    !clients.find(c => c.id === selectedSale?.clientId)
-                      ?.whatsappEnabled
-                  }
-                >
-                  {sendNotificationMutation.isPending
-                    ? "Enviando..."
-                    : "Enviar WhatsApp"}
-                </Button>
                 <Button
                   onClick={() => {
                     deleteInstallmentMutation.mutate({

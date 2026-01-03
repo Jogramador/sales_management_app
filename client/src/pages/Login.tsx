@@ -59,7 +59,7 @@ export default function Login() {
           <div className="text-center">
             <h1 className="text-3xl font-bold text-foreground">Login</h1>
             <p className="text-muted-foreground mt-2">
-              Modo de desenvolvimento - Autenticação local
+              Entre com seu nome para acessar o sistema
             </p>
           </div>
 
@@ -96,18 +96,12 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="text-center text-sm text-muted-foreground">
-            <p>
-              Este é um sistema de autenticação local para testes.
-              <br />
-              Configure OAuth para produção.
-            </p>
-          </div>
         </div>
       </Card>
     </div>
   );
 }
+
 
 
 

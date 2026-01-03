@@ -86,6 +86,7 @@ export const installments = mysqlTable("installments", {
   amount: int("amount").notNull(), // stored in cents
   status: mysqlEnum("status", ["pending", "paid", "overdue"]).default("pending").notNull(),
   paidAt: timestamp("paidAt"),
+  contacted: int("contacted").default(0).notNull(), // 0 = false, 1 = true - marca se já foi cobrado
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

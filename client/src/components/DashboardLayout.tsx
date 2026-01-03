@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { BarChart3, LogOut, PanelLeft, Users, ShoppingCart, CreditCard } from "lucide-react";
+import { BarChart3, LogOut, PanelLeft, Users, ShoppingCart, CreditCard, Bell } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -32,6 +32,7 @@ const menuItems = [
   { icon: Users, label: "Clientes", path: "/clients" },
   { icon: ShoppingCart, label: "Vendas", path: "/sales" },
   { icon: CreditCard, label: "Pagamentos", path: "/payments" },
+  { icon: Bell, label: "Cobranças", path: "/collections" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

@@ -39,15 +39,15 @@ async function startServer() {
   // OAuth callback under /api/oauth/callback (apenas se OAuth estiver configurado)
   if (ENV.oAuthServerUrl) {
     registerOAuthRoutes(app);
-  } else {
-    // Endpoint de login local para desenvolvimento
-    app.post("/api/auth/local-login", (req, res) => {
-      localAuth.handleLocalLogin(req, res);
-    });
-    console.log(
-      "[LocalAuth] Modo de autenticação local ativado. Use /api/auth/local-login para fazer login."
-    );
   }
+
+  // Endpoint de login local sempre disponível (para desenvolvimento e fallback)
+  app.post("/api/auth/local-login", (req, res) => {
+    localAuth.handleLocalLogin(req, res);
+  });
+  console.log(
+    "[LocalAuth] Endpoint de login local disponível em /api/auth/local-login"
+  );
   // tRPC API
   app.use(
     "/api/trpc",

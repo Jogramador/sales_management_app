@@ -22,8 +22,9 @@ import {
   updateInstallmentStatus,
   deleteInstallment,
   getClientSalesHistory,
+  getClientsWithDueInstallments,
+  updateInstallmentContacted,
 } from "./db";
-import { sendWhatsAppMessage, formatInstallmentNotification } from "./whatsapp";
 
 export const appRouter = router({
   system: systemRouter,
@@ -224,22 +225,24 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(({ input }) => deleteInstallment(input.id)),
 
-    sendNotification: protectedProcedure
-      .input(z.object({ installmentId: z.number() }))
-      .mutation(async ({ input }) => {
-        const installments = await getInstallmentsByUserId(1);
-        const installment = installments.find(i => i.id === input.installmentId);
-        if (!installment) throw new Error("Parcela nao encontrada");
-        const sale = await getSaleById(installment.saleId);
-        if (!sale) throw new Error("Venda nao encontrada");
-        const client = await getClientById(sale.clientId);
-        if (!client) throw new Error("Cliente nao encontrado");
-        if (!client.phone) throw new Error("Cliente nao possui telefone cadastrado");
-        const dueDate = new Date(installment.dueDate).toLocaleDateString('pt-BR');
-        const message = formatInstallmentNotification(client.name, installment.number, installment.amount, dueDate);
-        const success = await sendWhatsAppMessage(client.phone, message);
-        return { success, message: success ? "Notificacao enviada!" : "Erro ao enviar" };
-      }),
+    markAsContacted: protectedProcedure
+      .input(z.object({ id: z.number(), contacted: z.boolean() }))
+      .mutation(({ input }) =>
+        updateInstallmentContacted(input.id, input.contacted)
+      ),
+  }),
+
+  // Collections procedures - clients with due installments
+  collections: router({
+    getDueInstallments: protectedProcedure
+      .input(
+        z.object({
+          daysAhead: z.number().optional().default(7),
+        })
+      )
+      .query(({ ctx, input }) =>
+        getClientsWithDueInstallments(ctx.user.id, input.daysAhead)
+      ),
   }),
 });
 

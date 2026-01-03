@@ -16,11 +16,22 @@ export async function createContext(
   let user: User | null = null;
 
   try {
-    // Se OAuth não estiver configurado, usa autenticação local
-    if (!ENV.oAuthServerUrl) {
-      user = await localAuth.authenticateRequest(opts.req);
+    // Tenta OAuth primeiro se estiver configurado
+    if (ENV.oAuthServerUrl) {
+      try {
+        user = await sdk.authenticateRequest(opts.req);
+      } catch (oauthError) {
+        // Se OAuth falhar, tenta autenticação local como fallback
+        try {
+          user = await localAuth.authenticateRequest(opts.req);
+        } catch (localError) {
+          // Se ambos falharem, user permanece null
+          user = null;
+        }
+      }
     } else {
-      user = await sdk.authenticateRequest(opts.req);
+      // Se OAuth não estiver configurado, usa apenas autenticação local
+      user = await localAuth.authenticateRequest(opts.req);
     }
   } catch (error) {
     // Authentication is optional for public procedures.
