@@ -30,12 +30,18 @@ DATABASE_URL=mysql://usuario:senha@localhost:3306/nome_do_banco
 # Autenticação JWT
 JWT_SECRET=sua_chave_secreta_jwt_aqui
 
-# OAuth (opcional, se usar autenticação OAuth)
+# OAuth (opcional, se usar autenticação OAuth Manus)
 OAUTH_SERVER_URL=https://seu-servidor-oauth.com
 OWNER_OPEN_ID=seu_open_id_aqui
 
 # App ID (opcional)
 VITE_APP_ID=seu_app_id
+
+# Google OAuth (opcional, para login com Google)
+GOOGLE_CLIENT_ID=seu_google_client_id
+GOOGLE_CLIENT_SECRET=seu_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
+BASE_URL=http://localhost:3000
 
 # Forge API (opcional, para funcionalidades específicas)
 BUILT_IN_FORGE_API_URL=https://api.forge.com
@@ -50,6 +56,10 @@ TWILIO_WHATSAPP_NUMBER=seu_numero_whatsapp
 **Variáveis obrigatórias mínimas:**
 - `DATABASE_URL` - URL de conexão com o MySQL
 - `JWT_SECRET` - Chave secreta para assinatura de tokens JWT
+
+**Variáveis opcionais para autenticação:**
+- `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` - Para login com Google (veja [GOOGLE_OAUTH_SETUP.md](./GOOGLE_OAUTH_SETUP.md))
+- `OAUTH_SERVER_URL` - Para autenticação OAuth Manus (veja [OAUTH_SETUP.md](./OAUTH_SETUP.md))
 
 ### 3. Configurar o banco de dados
 
@@ -139,12 +149,24 @@ sales_management_app/
   - Vitest
   - Prettier
 
+## 🔐 Autenticação
+
+A aplicação suporta múltiplos métodos de autenticação:
+
+1. **Login com Email/Senha** - Registro e login tradicionais
+2. **Login com Google OAuth** - Autenticação via Google (veja [GOOGLE_OAUTH_SETUP.md](./GOOGLE_OAUTH_SETUP.md))
+3. **Login Local** - Para desenvolvimento/testes (apenas nome)
+4. **OAuth Manus** - Autenticação via servidor OAuth Manus (veja [OAUTH_SETUP.md](./OAUTH_SETUP.md))
+
+A página de login (`/login`) permite escolher entre os métodos disponíveis.
+
 ## 📝 Notas Importantes
 
 - A aplicação usa **pnpm** como gerenciador de pacotes. Não use `npm` ou `yarn`.
 - Certifique-se de que o MySQL está rodando antes de executar a aplicação.
 - As variáveis de ambiente são essenciais para o funcionamento correto da aplicação.
 - O banco de dados precisa ser criado e as migrations executadas antes de iniciar a aplicação.
+- Após adicionar o campo `passwordHash` ao schema, execute `pnpm db:push` para aplicar a migração.
 
 ## 🐛 Solução de Problemas
 

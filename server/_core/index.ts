@@ -5,6 +5,8 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { localAuth } from "./localAuth";
+import { emailAuth } from "./emailAuth";
+import { registerGoogleAuthRoutes } from "./googleAuth";
 import { ENV } from "./env";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -41,12 +43,26 @@ async function startServer() {
     registerOAuthRoutes(app);
   }
 
+  // Google OAuth routes
+  registerGoogleAuthRoutes(app);
+
   // Endpoint de login local sempre disponível (para desenvolvimento e fallback)
   app.post("/api/auth/local-login", (req, res) => {
     localAuth.handleLocalLogin(req, res);
   });
   console.log(
     "[LocalAuth] Endpoint de login local disponível em /api/auth/local-login"
+  );
+
+  // Endpoints de autenticação com email/senha
+  app.post("/api/auth/register", (req, res) => {
+    emailAuth.handleRegister(req, res);
+  });
+  app.post("/api/auth/login", (req, res) => {
+    emailAuth.handleLogin(req, res);
+  });
+  console.log(
+    "[EmailAuth] Endpoints disponíveis: /api/auth/register e /api/auth/login"
   );
   // tRPC API
   app.use(
