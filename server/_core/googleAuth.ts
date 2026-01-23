@@ -100,15 +100,33 @@ export class GoogleAuth {
       }
 
       const openId = this.generateOpenIdFromGoogleId(googleId);
+      console.log("[GoogleAuth] Generated openId:", openId);
 
       // Verifica se o usuário já existe
-      let user = await db.getUserByOpenId(openId);
+      let user: Awaited<ReturnType<typeof db.getUserByOpenId>>;
+      try {
+        user = await db.getUserByOpenId(openId);
+        console.log("[GoogleAuth] User lookup result:", user ? "found" : "not found");
+      } catch (error) {
+        console.error("[GoogleAuth] Error looking up user by openId:", error);
+        throw new Error(`Erro ao buscar usuário: ${error instanceof Error ? error.message : String(error)}`);
+      }
 
       if (!user) {
         // Verifica se já existe um usuário com este email
-        const existingUserByEmail = await db.getUserByEmail(email);
+        let existingUserByEmail: Awaited<ReturnType<typeof db.getUserByEmail>>;
+        try {
+          existingUserByEmail = await db.getUserByEmail(email.toLowerCase());
+          console.log("[GoogleAuth] Email lookup result:", existingUserByEmail ? "found" : "not found");
+        } catch (error) {
+          console.error("[GoogleAuth] Error looking up user by email:", error);
+          // Continua mesmo se houver erro na busca por email
+          existingUserByEmail = undefined;
+        }
+
         if (existingUserByEmail) {
           // Se existe, atualiza o openId para vincular ao Google
+          console.log("[GoogleAuth] Updating existing user with Google openId");
           await db.upsertUser({
             openId,
             email: email.toLowerCase(),
@@ -118,6 +136,7 @@ export class GoogleAuth {
           });
         } else {
           // Cria novo usuário
+          console.log("[GoogleAuth] Creating new user");
           await db.upsertUser({
             openId,
             email: email.toLowerCase(),
@@ -126,9 +145,18 @@ export class GoogleAuth {
             lastSignedIn: new Date(),
           });
         }
-        user = await db.getUserByOpenId(openId);
+        
+        // Busca o usuário recém-criado/atualizado
+        try {
+          user = await db.getUserByOpenId(openId);
+          console.log("[GoogleAuth] User after upsert:", user ? "found" : "not found");
+        } catch (error) {
+          console.error("[GoogleAuth] Error fetching user after upsert:", error);
+          throw new Error(`Erro ao buscar usuário após criação: ${error instanceof Error ? error.message : String(error)}`);
+        }
       } else {
         // Atualiza informações do usuário existente
+        console.log("[GoogleAuth] Updating existing user info");
         await db.upsertUser({
           openId,
           email: email.toLowerCase(),
@@ -136,11 +164,17 @@ export class GoogleAuth {
           loginMethod: "google",
           lastSignedIn: new Date(),
         });
-        user = await db.getUserByOpenId(openId);
+        
+        try {
+          user = await db.getUserByOpenId(openId);
+        } catch (error) {
+          console.error("[GoogleAuth] Error fetching user after update:", error);
+          throw new Error(`Erro ao buscar usuário após atualização: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
 
       if (!user) {
-        throw new Error("Falha ao criar/recuperar usuário");
+        throw new Error("Falha ao criar/recuperar usuário após todas as tentativas");
       }
 
       // Cria o token de sessão usando o emailAuth (mesmo sistema de sessão)

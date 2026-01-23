@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Loader2, Calendar, FileDown } from "lucide-react";
+import { Plus, Trash2, Loader2, Calendar, FileDown, Eye, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   ExportReportModal,
@@ -54,8 +54,12 @@ interface Sale {
 
 export default function Sales() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedSaleId, setSelectedSaleId] = useState<number | null>(null);
+  const [editingSaleId, setEditingSaleId] = useState<number | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [saleDate, setSaleDate] = useState(
     new Date().toISOString().split("T")[0]
@@ -86,6 +90,24 @@ export default function Sales() {
     refetch: refetchSales,
   } = trpc.sales.list.useQuery();
 
+  // Query para buscar detalhes da venda selecionada
+  const { data: selectedSale, isLoading: selectedSaleLoading } = trpc.sales.getById.useQuery(
+    { id: selectedSaleId! },
+    { enabled: selectedSaleId !== null }
+  );
+
+  // Query para produtos da venda selecionada
+  const { data: saleProducts = [] } = trpc.products.getBySaleId.useQuery(
+    selectedSaleId!,
+    { enabled: selectedSaleId !== null }
+  );
+
+  // Query para parcelas da venda selecionada
+  const { data: saleInstallments = [] } = trpc.installments.getBySaleId.useQuery(
+    { saleId: selectedSaleId! },
+    { enabled: selectedSaleId !== null }
+  );
+
   // Mutations
   const deleteSaleMutation = trpc.sales.delete.useMutation({
     onSuccess: () => {
@@ -106,6 +128,19 @@ export default function Sales() {
     },
     onError: error => {
       toast.error(error.message || "Erro ao registrar venda");
+    },
+  });
+
+  const updateSaleMutation = trpc.sales.update.useMutation({
+    onSuccess: () => {
+      toast.success("Venda atualizada com sucesso!");
+      resetForm();
+      setIsEditDialogOpen(false);
+      setEditingSaleId(null);
+      refetchSales();
+    },
+    onError: error => {
+      toast.error(error.message || "Erro ao atualizar venda");
     },
   });
 
@@ -393,6 +428,138 @@ export default function Sales() {
     }
   };
 
+  const handleViewDetails = (saleId: number) => {
+    setSelectedSaleId(saleId);
+    setIsDetailsDialogOpen(true);
+  };
+
+  // Queries para edição
+  const { data: editingSale } = trpc.sales.getById.useQuery(
+    { id: editingSaleId! },
+    { enabled: editingSaleId !== null }
+  );
+
+  const { data: editingProducts = [] } = trpc.products.getBySaleId.useQuery(
+    editingSaleId!,
+    { enabled: editingSaleId !== null }
+  );
+
+  const { data: editingInstallments = [] } = trpc.installments.getBySaleId.useQuery(
+    { saleId: editingSaleId! },
+    { enabled: editingSaleId !== null }
+  );
+
+  // Preencher formulário quando os dados de edição estiverem disponíveis
+  useEffect(() => {
+    if (editingSale && editingSaleId && isEditDialogOpen) {
+      setSelectedClientId(String(editingSale.clientId));
+      setSaleDate(new Date(editingSale.date).toISOString().split("T")[0]);
+      setPaymentType(editingSale.paymentType);
+      setInstallmentCount(editingSale.installmentCount);
+    }
+  }, [editingSale, editingSaleId, isEditDialogOpen]);
+
+  useEffect(() => {
+    if (editingProducts.length > 0 && editingSaleId && isEditDialogOpen) {
+      const prods = editingProducts.map(p => ({
+        description: p.description,
+        price: p.price / 100,
+        quantity: p.quantity,
+      }));
+      setProducts(prods);
+      const inputs: Record<number, string> = {};
+      prods.forEach((p, idx) => {
+        inputs[idx] = formatDecimal(p.price);
+      });
+      setProductInputs(inputs);
+    }
+  }, [editingProducts, editingSaleId, isEditDialogOpen]);
+
+  useEffect(() => {
+    if (editingInstallments.length > 0 && editingSaleId && isEditDialogOpen) {
+      const insts = editingInstallments.map(i => ({
+        number: i.number,
+        dueDate: new Date(i.dueDate).toISOString().split("T")[0],
+        amount: i.amount / 100,
+      }));
+      setInstallments(insts);
+      const inputs: Record<number, string> = {};
+      insts.forEach((i, idx) => {
+        inputs[idx] = formatDecimal(i.amount);
+      });
+      setInstallmentInputs(inputs);
+    }
+  }, [editingInstallments, editingSaleId, isEditDialogOpen]);
+
+  const handleEditSale = (saleId: number) => {
+    setEditingSaleId(saleId);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateSale = () => {
+    if (!editingSaleId || !selectedClientId) {
+      toast.error("Selecione um cliente");
+      return;
+    }
+
+    if (products.some(p => !p.description || isNaN(p.price) || p.price <= 0)) {
+      toast.error("Todos os produtos devem ter descrição e preço");
+      return;
+    }
+
+    const total = calculateTotal();
+    if (total <= 0) {
+      toast.error("O valor total deve ser maior que zero");
+      return;
+    }
+
+    if (paymentType === "installment") {
+      if (
+        installments.some(i => !i.dueDate || isNaN(i.amount) || i.amount <= 0)
+      ) {
+        toast.error("Todas as parcelas devem ter data de vencimento e valor");
+        return;
+      }
+
+      const installmentTotal = installments.reduce((sum, i) => {
+        const amount = isNaN(i.amount) ? 0 : i.amount;
+        return sum + amount;
+      }, 0);
+      if (installmentTotal !== total) {
+        toast.error(
+          `A soma das parcelas (${formatCurrencyFromReais(installmentTotal)}) deve ser igual ao total (${formatCurrencyFromReais(total)})`
+        );
+        return;
+      }
+    }
+
+    const totalInCents = Math.round(total * 100);
+
+    const processedInstallments =
+      paymentType === "installment"
+        ? installments.map(i => ({
+            number: i.number,
+            dueDate: createLocalDate(i.dueDate),
+            amount: Math.round(i.amount * 100),
+          }))
+        : undefined;
+
+    updateSaleMutation.mutate({
+      id: editingSaleId,
+      clientId: Number(selectedClientId),
+      date: createLocalDate(saleDate),
+      total: totalInCents,
+      paymentType,
+      installmentCount: paymentType === "installment" ? installments.length : 1,
+      products: products.map(p => ({
+        description: p.description,
+        price: Math.round(p.price * 100),
+        quantity: p.quantity,
+      })),
+      installments: processedInstallments,
+    });
+  };
+
   const total = calculateTotal();
   const installmentTotal = installments.reduce((sum, i) => {
     const amount = isNaN(i.amount) ? 0 : i.amount;
@@ -489,15 +656,35 @@ export default function Sales() {
                           ? "À Vista"
                           : `${sale.installmentCount}x`}
                       </td>
-                      <td className="p-3 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteSale(sale.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                      <td className="p-3">
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewDetails(sale.id)}
+                            className="gap-1"
+                          >
+                            <Eye className="w-4 h-4" />
+                            Detalhes
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditSale(sale.id)}
+                            className="gap-1"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                            Editar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteSale(sale.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -889,6 +1076,498 @@ export default function Sales() {
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 )}
                 Registrar Venda
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Details Dialog */}
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Detalhes da Venda</DialogTitle>
+          </DialogHeader>
+
+          {selectedSaleLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : selectedSale ? (
+            <div className="space-y-6">
+              {/* Informações Gerais */}
+              <Card className="p-4">
+                <h3 className="font-semibold text-foreground mb-4">Informações Gerais</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Cliente</p>
+                    <p className="font-medium text-foreground">
+                      {clients.find(c => c.id === selectedSale.clientId)?.name || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Data</p>
+                    <p className="font-medium text-foreground">
+                      {formatDate(selectedSale.date)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Valor Total</p>
+                    <p className="font-semibold text-lg text-foreground">
+                      {formatCurrency(selectedSale.total)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Forma de Pagamento</p>
+                    <p className="font-medium text-foreground">
+                      {selectedSale.paymentType === "cash" ? "À Vista" : `${selectedSale.installmentCount}x Parcelado`}
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Produtos */}
+              <Card className="p-4">
+                <h3 className="font-semibold text-foreground mb-4">Produtos</h3>
+                {saleProducts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhum produto registrado</p>
+                ) : (
+                  <div className="space-y-2">
+                    {saleProducts.map((product, index) => (
+                      <div key={index} className="flex justify-between items-center p-3 bg-muted rounded">
+                        <div className="flex-1">
+                          <p className="font-medium text-foreground">{product.description}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Quantidade: {product.quantity} × {formatCurrency(product.price)}
+                          </p>
+                        </div>
+                        <p className="font-semibold text-foreground">
+                          {formatCurrency(product.price * product.quantity)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              {/* Parcelas */}
+              {selectedSale.paymentType === "installment" && (
+                <Card className="p-4">
+                  <h3 className="font-semibold text-foreground mb-4">Parcelas</h3>
+                  {saleInstallments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhuma parcela registrada</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {saleInstallments.map((installment) => (
+                        <div key={installment.id} className="flex justify-between items-center p-3 bg-muted rounded">
+                          <div>
+                            <p className="font-medium text-foreground">
+                              Parcela {installment.number}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Vencimento: {formatDate(installment.dueDate)}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Status: {installment.status === "paid" ? "Paga" : installment.status === "overdue" ? "Atrasada" : "Pendente"}
+                            </p>
+                          </div>
+                          <p className="font-semibold text-foreground">
+                            {formatCurrency(installment.amount)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              )}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">Venda não encontrada</p>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+        setIsEditDialogOpen(open);
+        if (!open) {
+          setEditingSaleId(null);
+          resetForm();
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-sm md:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar Venda</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Client Selection */}
+            <div>
+              <label className="text-sm font-medium text-foreground">
+                Cliente *
+              </label>
+              <Select
+                value={selectedClientId}
+                onValueChange={setSelectedClientId}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Selecione um cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clientsLoading ? (
+                    <div className="p-2 text-center text-sm text-muted-foreground">
+                      Carregando clientes...
+                    </div>
+                  ) : clients.length === 0 ? (
+                    <div className="p-2 text-center text-sm text-muted-foreground">
+                      Nenhum cliente cadastrado
+                    </div>
+                  ) : (
+                    clients.map(client => (
+                      <SelectItem key={client.id} value={String(client.id)}>
+                        {client.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Date */}
+            <div>
+              <label className="text-sm font-medium text-foreground">
+                Data da Venda *
+              </label>
+              <div className="flex items-center gap-2 mt-1">
+                <Calendar className="w-4 h-4 text-muted-foreground" />
+                <Input
+                  type="date"
+                  value={saleDate}
+                  onChange={e => setSaleDate(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+            </div>
+
+            {/* Products */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <label className="text-sm font-medium text-foreground">
+                  Produtos *
+                </label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddProduct}
+                  className="gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  Adicionar
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                {products.map((product, index) => (
+                  <Card key={index} className="p-4 bg-muted/30">
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs font-medium text-foreground">
+                          Descrição *
+                        </label>
+                        <Input
+                          placeholder="Digite a descrição do produto"
+                          value={product.description}
+                          onChange={e =>
+                            handleProductChange(
+                              index,
+                              "description",
+                              e.target.value
+                            )
+                          }
+                          className="mt-1"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-medium text-foreground">
+                            Valor *
+                          </label>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="0,00"
+                            value={
+                              productInputs[index] !== undefined
+                                ? productInputs[index]
+                                : isNaN(product.price)
+                                  ? "0,00"
+                                  : formatDecimal(product.price)
+                            }
+                            onChange={e =>
+                              handleProductChange(
+                                index,
+                                "price",
+                                e.target.value
+                              )
+                            }
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-foreground">
+                            Quantidade *
+                          </label>
+                          <Input
+                            type="number"
+                            inputMode="numeric"
+                            placeholder="1"
+                            value={product.quantity}
+                            onChange={e =>
+                              handleProductChange(
+                                index,
+                                "quantity",
+                                e.target.value
+                              )
+                            }
+                            className="mt-1"
+                            min="1"
+                          />
+                        </div>
+                      </div>
+
+                      {products.length > 1 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRemoveProduct(index)}
+                          className="w-full text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Remover Produto
+                        </Button>
+                      )}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {/* Payment Type */}
+            <div>
+              <label className="text-sm font-medium text-foreground">
+                Forma de Pagamento *
+              </label>
+              <Select
+                value={paymentType}
+                onValueChange={value =>
+                  setPaymentType(value as "cash" | "installment")
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">À Vista</SelectItem>
+                  <SelectItem value="installment">Parcelado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Installments */}
+            {paymentType === "installment" && (
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <label className="text-sm font-medium text-foreground">
+                    Parcelas *
+                  </label>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleAddInstallment}
+                    className="gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Adicionar Parcela
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  {installments.map((installment, index) => (
+                    <Card key={index} className="p-4 bg-muted/30">
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="text-xs font-medium text-foreground">
+                              Parcela
+                            </label>
+                            <Input
+                              type="number"
+                              inputMode="numeric"
+                              value={installment.number}
+                              onChange={e =>
+                                handleInstallmentChange(
+                                  index,
+                                  "number",
+                                  e.target.value
+                                )
+                              }
+                              className="mt-1"
+                              min="1"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-foreground">
+                              Vencimento *
+                            </label>
+                            <Input
+                              type="date"
+                              value={installment.dueDate}
+                              onChange={e =>
+                                handleInstallmentChange(
+                                  index,
+                                  "dueDate",
+                                  e.target.value
+                                )
+                              }
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-foreground">
+                              Valor *
+                            </label>
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0,00"
+                              value={
+                                installmentInputs[index] !== undefined
+                                  ? installmentInputs[index]
+                                  : isNaN(installment.amount)
+                                    ? "0,00"
+                                    : formatDecimal(installment.amount)
+                              }
+                              onChange={e =>
+                                handleInstallmentChange(
+                                  index,
+                                  "amount",
+                                  e.target.value
+                                )
+                              }
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+
+                        {installments.length > 1 && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRemoveInstallment(index)}
+                            className="w-full text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Remover Parcela
+                          </Button>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Summary */}
+            <Card className="p-4 bg-muted">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal:</span>
+                  <span className="font-medium text-foreground">
+                    {formatCurrencyFromReais(total)}
+                  </span>
+                </div>
+                <div className="border-t border-border pt-2 flex justify-between">
+                  <span className="font-semibold text-foreground">Total:</span>
+                  <span className="font-bold text-lg text-foreground">
+                    {formatCurrencyFromReais(total)}
+                  </span>
+                </div>
+
+                {paymentType === "installment" && (
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <p className="text-sm font-medium text-foreground mb-2">
+                      Resumo das Parcelas:
+                    </p>
+                    <div className="space-y-1">
+                      {installments.map(inst => {
+                        const amount = isNaN(inst.amount) ? 0 : inst.amount;
+                        return (
+                          <div
+                            key={inst.number}
+                            className="flex justify-between text-xs text-muted-foreground"
+                          >
+                            <span>Parcela {inst.number}:</span>
+                            <span>
+                              {isNaN(inst.amount) || inst.amount === 0
+                                ? "—"
+                                : `${formatCurrencyFromReais(amount)} - Venc. ${
+                                    inst.dueDate
+                                      ? formatDate(inst.dueDate)
+                                      : "—"
+                                  }`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex justify-between text-sm font-semibold text-foreground mt-2 pt-2 border-t border-border">
+                      <span>Total Parcelas:</span>
+                      <span>{formatCurrencyFromReais(installmentTotal)}</span>
+                    </div>
+                    {(() => {
+                      const remaining = total - installmentTotal;
+                      if (remaining > 0.01) {
+                        return (
+                          <div className="flex justify-between text-sm font-semibold mt-2 pt-2 border-t border-border text-orange-600">
+                            <span>Falta:</span>
+                            <span>{formatCurrencyFromReais(remaining)}</span>
+                          </div>
+                        );
+                      } else if (remaining < -0.01) {
+                        return (
+                          <div className="flex justify-between text-sm font-semibold mt-2 pt-2 border-t border-border text-red-600">
+                            <span>Excede:</span>
+                            <span>
+                              {formatCurrencyFromReais(Math.abs(remaining))}
+                            </span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Actions */}
+            <div className="flex gap-2 justify-end pt-4">
+              <Button variant="outline" onClick={() => {
+                setIsEditDialogOpen(false);
+                setEditingSaleId(null);
+                resetForm();
+              }}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleUpdateSale}
+                disabled={updateSaleMutation.isPending}
+              >
+                {updateSaleMutation.isPending && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
+                Salvar Alterações
               </Button>
             </div>
           </div>

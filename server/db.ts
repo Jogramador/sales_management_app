@@ -95,13 +95,19 @@ export async function getUserByOpenId(openId: string) {
     return undefined;
   }
 
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.openId, openId))
-    .limit(1);
+  try {
+    const result = await db
+      .select()
+      .from(users)
+      .where(eq(users.openId, openId))
+      .limit(1);
 
-  return result.length > 0 ? result[0] : undefined;
+    return result.length > 0 ? result[0] : undefined;
+  } catch (error) {
+    console.error("[Database] Error getting user by openId:", error);
+    console.error("[Database] openId:", openId);
+    throw error;
+  }
 }
 
 export async function getUserByEmail(email: string) {
@@ -111,13 +117,19 @@ export async function getUserByEmail(email: string) {
     return undefined;
   }
 
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
+  try {
+    const result = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
 
-  return result.length > 0 ? result[0] : undefined;
+    return result.length > 0 ? result[0] : undefined;
+  } catch (error) {
+    console.error("[Database] Error getting user by email:", error);
+    console.error("[Database] email:", email);
+    throw error;
+  }
 }
 
 // Clients queries
@@ -229,6 +241,27 @@ export async function createProduct(data: InsertProduct) {
   return result;
 }
 
+export async function updateProduct(productId: number, data: Partial<InsertProduct>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db
+    .update(products)
+    .set(data)
+    .where(eq(products.id, productId));
+}
+
+export async function deleteProduct(productId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(products).where(eq(products.id, productId));
+}
+
+export async function deleteProductsBySaleId(saleId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(products).where(eq(products.saleId, saleId));
+}
+
 // Installments queries
 export async function getInstallmentsBySaleId(saleId: number) {
   const db = await getDb();
@@ -269,6 +302,21 @@ export async function createInstallment(data: InsertInstallment) {
   if (!db) throw new Error("Database not available");
   const result = await db.insert(installments).values(data);
   return result;
+}
+
+export async function updateInstallment(installmentId: number, data: Partial<InsertInstallment>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db
+    .update(installments)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(installments.id, installmentId));
+}
+
+export async function deleteInstallmentsBySaleId(saleId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(installments).where(eq(installments.saleId, saleId));
 }
 
 export async function updateInstallmentStatus(

@@ -16,11 +16,13 @@ import {
   deleteSale,
   getProductsBySaleId,
   createProduct,
+  deleteProductsBySaleId,
   getInstallmentsBySaleId,
   getInstallmentsByUserId,
   createInstallment,
   updateInstallmentStatus,
   deleteInstallment,
+  deleteInstallmentsBySaleId,
   getClientSalesHistory,
   getClientsWithDueInstallments,
   updateInstallmentContacted,
@@ -173,6 +175,88 @@ export const appRouter = router({
             status: "paid",
             paidAt: new Date(),
           });
+        }
+
+        return { id: saleId };
+      }),
+
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          clientId: z.number().optional(),
+          date: z.date().optional(),
+          total: z.number().optional(),
+          paymentType: z.enum(["cash", "installment"]).optional(),
+          installmentCount: z.number().optional(),
+          products: z
+            .array(
+              z.object({
+                id: z.number().optional(),
+                description: z.string(),
+                price: z.number(),
+                quantity: z.number().default(1),
+              })
+            )
+            .optional(),
+          installments: z
+            .array(
+              z.object({
+                id: z.number().optional(),
+                number: z.number(),
+                dueDate: z.date(),
+                amount: z.number(),
+              })
+            )
+            .optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { id, products, installments, ...saleData } = input;
+        const saleId = id;
+
+        // Atualiza a venda
+        if (Object.keys(saleData).length > 0) {
+          await updateSale(saleId, saleData);
+        }
+
+        // Atualiza produtos se fornecidos
+        if (products !== undefined) {
+          await deleteProductsBySaleId(saleId);
+          for (const product of products) {
+            await createProduct({
+              saleId,
+              description: product.description,
+              price: product.price,
+              quantity: product.quantity,
+            });
+          }
+        }
+
+        // Atualiza parcelas se fornecidas
+        if (installments !== undefined) {
+          await deleteInstallmentsBySaleId(saleId);
+          for (const installment of installments) {
+            await createInstallment({
+              saleId,
+              number: installment.number,
+              dueDate: installment.dueDate,
+              amount: installment.amount,
+            });
+          }
+        } else if (saleData.paymentType === "cash") {
+          await deleteInstallmentsBySaleId(saleId);
+          const sale = await getSaleById(saleId);
+          if (sale) {
+            await createInstallment({
+              saleId,
+              number: 1,
+              dueDate: sale.date,
+              amount: sale.total,
+              status: "paid",
+              paidAt: new Date(),
+            });
+          }
         }
 
         return { id: saleId };

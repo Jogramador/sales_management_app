@@ -43,7 +43,7 @@ Este guia explica como configurar o Google OAuth na aplicação Sales Management
    - **Nome**: Sales Management App Client
    - **URIs de redirecionamento autorizados**:
      - Para desenvolvimento: `http://localhost:3000/api/auth/google/callback`
-     - Para produção: `https://seu-dominio.com/api/auth/google/callback`
+     - Para produção: `https://sunny-youthfulness-production.up.railway.app/api/auth/google/callback`
 5. Clique em **Criar**
 6. **Copie o ID do cliente e o Segredo do cliente** (você precisará deles)
 
@@ -58,7 +58,7 @@ GOOGLE_CLIENT_SECRET=seu_client_secret_aqui
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 
 # Para produção, use:
-# GOOGLE_REDIRECT_URI=https://seu-dominio.com/api/auth/google/callback
+# GOOGLE_REDIRECT_URI=https://sunny-youthfulness-production.up.railway.app/api/auth/google/callback
 
 # Base URL (opcional, será inferido automaticamente)
 BASE_URL=http://localhost:3000

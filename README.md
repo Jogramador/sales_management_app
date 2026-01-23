@@ -46,11 +46,6 @@ BASE_URL=http://localhost:3000
 # Forge API (opcional, para funcionalidades específicas)
 BUILT_IN_FORGE_API_URL=https://api.forge.com
 BUILT_IN_FORGE_API_KEY=sua_chave_api
-
-# Twilio (opcional, para WhatsApp)
-TWILIO_ACCOUNT_SID=seu_account_sid
-TWILIO_AUTH_TOKEN=seu_auth_token
-TWILIO_WHATSAPP_NUMBER=seu_numero_whatsapp
 ```
 
 **Variáveis obrigatórias mínimas:**
@@ -159,6 +154,20 @@ A aplicação suporta múltiplos métodos de autenticação:
 4. **OAuth Manus** - Autenticação via servidor OAuth Manus (veja [OAUTH_SETUP.md](./OAUTH_SETUP.md))
 
 A página de login (`/login`) permite escolher entre os métodos disponíveis.
+
+## 🌍 Ambientes: Local vs Produção
+
+Para entender quando e como usar a aplicação em desenvolvimento local ou em produção, consulte o guia completo:
+
+📖 **[AMBIENTES_LOCAL_PRODUCAO.md](./AMBIENTES_LOCAL_PRODUCAO.md)** - Guia completo sobre configuração e uso de ambientes
+
+Este guia explica:
+- Quando usar cada ambiente
+- Como configurar desenvolvimento local
+- Como configurar produção no Railway
+- Diferenças entre ambientes
+- Fluxo de trabalho recomendado
+- Solução de problemas comuns
 
 ## 📝 Notas Importantes
 
