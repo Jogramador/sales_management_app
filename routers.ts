@@ -1,0 +1,334 @@
+import { COOKIE_NAME } from "@shared/const";
+import { getSessionCookieOptions } from "./_core/cookies";
+import { systemRouter } from "./_core/systemRouter";
+import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
+import { z } from "zod";
+import {
+  getClientsByUserId,
+  getClientById,
+  createClient,
+  updateClient,
+  deleteClient,
+  getSalesByUserId,
+  getSaleById,
+  createSale,
+  updateSale,
+  deleteSale,
+  getProductsBySaleId,
+  createProduct,
+  deleteProductsBySaleId,
+  getInstallmentsBySaleId,
+  getInstallmentsByUserId,
+  createInstallment,
+  updateInstallmentStatus,
+  deleteInstallment,
+  deleteInstallmentsBySaleId,
+  getClientSalesHistory,
+  getClientsWithDueInstallments,
+  updateInstallmentContacted,
+} from "./db";
+
+export const appRouter = router({
+  system: systemRouter,
+  auth: router({
+    me: publicProcedure.query((opts) => opts.ctx.user),
+    logout: publicProcedure.mutation(({ ctx }) => {
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      return {
+        success: true,
+      } as const;
+    }),
+  }),
+
+  // Clients procedures
+  clients: router({
+    list: protectedProcedure.query(({ ctx }) =>
+      getClientsByUserId(ctx.user.id)
+    ),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(({ input }) => getClientById(input.id)),
+
+    create: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().min(1, "Nome é obrigatório"),
+          phone: z.string().optional().nullable(),
+          notes: z.string().optional(),
+          whatsappEnabled: z.number().optional().default(0),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        createClient({
+          userId: ctx.user.id,
+          name: input.name,
+          phone: input.phone || undefined,
+          notes: input.notes,
+          whatsappEnabled: input.whatsappEnabled,
+        })
+      ),
+
+    getSalesHistory: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(({ input }) => getClientSalesHistory(input.clientId)),
+
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          name: z.string().min(1),
+          phone: z.string().optional().nullable(),
+          notes: z.string().optional(),
+          whatsappEnabled: z.number().optional(),
+        })
+      )
+      .mutation(({ input }) =>
+        updateClient(input.id, {
+          name: input.name,
+          phone: input.phone || undefined,
+          notes: input.notes,
+          whatsappEnabled: input.whatsappEnabled,
+        })
+      ),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ input }) => deleteClient(input.id)),
+  }),
+
+  // Sales procedures
+  sales: router({
+    list: protectedProcedure.query(({ ctx }) => getSalesByUserId(ctx.user.id)),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(({ input }) => getSaleById(input.id)),
+
+    create: protectedProcedure
+      .input(
+        z.object({
+          clientId: z.number(),
+          date: z.date(),
+          total: z.number(),
+          paymentType: z.enum(["cash", "installment"]),
+          installmentCount: z.number().default(1),
+          products: z.array(
+            z.object({
+              description: z.string(),
+              price: z.number(),
+              quantity: z.number().default(1),
+            })
+          ),
+          installments: z
+            .array(
+              z.object({
+                number: z.number(),
+                dueDate: z.date(),
+                amount: z.number(),
+              })
+            )
+            .optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        // Create sale
+        const saleResult = await createSale({
+          userId: ctx.user.id,
+          clientId: input.clientId,
+          date: input.date,
+          total: input.total,
+          paymentType: input.paymentType,
+          installmentCount: input.installmentCount,
+        });
+
+        const saleId = saleResult[0].insertId;
+
+        // Create products
+        for (const product of input.products) {
+          await createProduct({
+            saleId,
+            description: product.description,
+            price: product.price,
+            quantity: product.quantity,
+          });
+        }
+
+        // Create installments
+        if (input.installments && input.installments.length > 0) {
+          for (const installment of input.installments) {
+            await createInstallment({
+              saleId,
+              number: installment.number,
+              dueDate: installment.dueDate,
+              amount: installment.amount,
+            });
+          }
+        } else if (input.paymentType === "cash") {
+          // For cash payments, create a single installment marked as paid
+          await createInstallment({
+            saleId,
+            number: 1,
+            dueDate: input.date,
+            amount: input.total,
+            status: "paid",
+            paidAt: new Date(),
+          });
+        }
+
+        return { id: saleId };
+      }),
+
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          clientId: z.number().optional(),
+          date: z.date().optional(),
+          total: z.number().optional(),
+          paymentType: z.enum(["cash", "installment"]).optional(),
+          installmentCount: z.number().optional(),
+          products: z
+            .array(
+              z.object({
+                id: z.number().optional(),
+                description: z.string(),
+                price: z.number(),
+                quantity: z.number().default(1),
+              })
+            )
+            .optional(),
+          installments: z
+            .array(
+              z.object({
+                id: z.number().optional(),
+                number: z.number(),
+                dueDate: z.date(),
+                amount: z.number(),
+              })
+            )
+            .optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { id, products, installments, ...saleData } = input;
+        const saleId = id;
+
+        // Atualiza a venda
+        if (Object.keys(saleData).length > 0) {
+          await updateSale(saleId, saleData);
+        }
+
+        // Atualiza produtos se fornecidos
+        if (products !== undefined) {
+          // Remove produtos antigos e insere os novos para garantir consistência
+          await deleteProductsBySaleId(saleId);
+          for (const product of products) {
+            await createProduct({
+              saleId,
+              description: product.description,
+              price: product.price,
+              quantity: product.quantity,
+            });
+          }
+        }
+
+        // Atualiza parcelas se fornecidas
+        if (installments !== undefined) {
+          await deleteInstallmentsBySaleId(saleId);
+          for (const installment of installments) {
+            await createInstallment({
+              saleId,
+              number: installment.number,
+              dueDate: installment.dueDate,
+              amount: installment.amount,
+            });
+          }
+        } else if (saleData.paymentType === "cash") {
+          await deleteInstallmentsBySaleId(saleId);
+          const sale = await getSaleById(saleId);
+          if (sale) {
+            await createInstallment({
+              saleId,
+              number: 1,
+              dueDate: sale.date,
+              amount: sale.total,
+              status: "paid",
+              paidAt: new Date(),
+            });
+          }
+        }
+
+        return { id: saleId };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ input }) => deleteSale(input.id)),
+  }),
+
+  // Products procedures
+  products: router({
+    getBySaleId: protectedProcedure
+      .input(z.object({ saleId: z.number() }))
+      .query(({ input }) => getProductsBySaleId(input.saleId)),
+  }),
+
+  // Installments procedures
+  installments: router({
+    list: protectedProcedure.query(({ ctx }) =>
+      getInstallmentsByUserId(ctx.user.id)
+    ),
+
+    getBySaleId: protectedProcedure
+      .input(z.object({ saleId: z.number() }))
+      .query(({ input }) => getInstallmentsBySaleId(input.saleId)),
+
+    markAsPaid: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ input }) =>
+        updateInstallmentStatus(input.id, "paid", new Date())
+      ),
+
+    updateStatus: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          status: z.enum(["pending", "paid", "overdue"]),
+        })
+      )
+      .mutation(({ input }) =>
+        updateInstallmentStatus(
+          input.id,
+          input.status,
+          input.status === "paid" ? new Date() : undefined
+        )
+      ),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ input }) => deleteInstallment(input.id)),
+
+    markAsContacted: protectedProcedure
+      .input(z.object({ id: z.number(), contacted: z.boolean() }))
+      .mutation(({ input }) =>
+        updateInstallmentContacted(input.id, input.contacted)
+      ),
+  }),
+
+  // Collections procedures - clients with due installments
+  collections: router({
+    getDueInstallments: protectedProcedure
+      .input(
+        z.object({
+          daysAhead: z.number().optional().default(7),
+        })
+      )
+      .query(({ ctx, input }) =>
+        getClientsWithDueInstallments(ctx.user.id, input.daysAhead)
+      ),
+  }),
+});
+
+export type AppRouter = typeof appRouter;
